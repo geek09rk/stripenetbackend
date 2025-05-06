@@ -6,6 +6,7 @@ import argparse
 import time
 
 ver= '0.0.1'
+database_folder = ''
 
 parser = argparse.ArgumentParser(description="""hpinterolog {}: A python based interolog based host-pathogen identification package""".format(ver),
 usage="""%(prog)s [options]""",
@@ -20,6 +21,7 @@ parser.add_argument("--ppidb", dest='ppidb', help="Interolog host pathogen inter
 parser.add_argument("--host_table", dest='hosttable', help="Host blast result table")
 parser.add_argument("--out", dest='out', help="Outfile for results")
 parser.add_argument("--pathogen_table", dest='pathogentable', help="Pathogen blast result table")
+parser.add_argument("--pathogen_table2", dest='pathogentable2', help="Secondaty pathogen blast result table")
 parser.add_argument("--host_identity", dest='hi', type=int, help="Host identitiy for blast filter")
 parser.add_argument("--host_coverage", dest='hc',type=int, help="Host coverage for blast filter")
 parser.add_argument("--host_evalue", dest='he', type=float, help="Host evalue for blast filter")
@@ -77,7 +79,7 @@ def filter_blast(table,ident, cov, evalue,intdb,db,genes=None):
 
 
 def ppi(intdb, pathogendf, hostdf):  
-    conn = create_connection('ppidb.db')
+    conn = create_connection(database_folder + 'ppidb.db')
     pathogen_list = pathogendf['sseqid'].values.tolist()
     host_list = hostdf['sseqid'].values.tolist()
     
@@ -130,7 +132,7 @@ def ppi(intdb, pathogendf, hostdf):
 
 
 def filter_domain(table, intdb, idt=None, genes=None):
-    mydb = create_connection("allblast.db")
+    mydb = create_connection(database_folder + "allblast.db")
  
     if genes !=None:
         ht="("
@@ -207,12 +209,26 @@ def main():
 
             if  isinstance(pathogen_blast, pd.DataFrame) and isinstance(host_blast, pd.DataFrame):
                 results = ppi(hd,pathogen_blast,host_blast)
+                results['species'] = options.pathogentable.split("_")[1]
                 results.reset_index(inplace=True, drop=True)
                 results_list[hpd]=results
-             
+            
+            if options.pathogentable2 != "null":
+                pathogen_blast2 = filter_blast(options.pathogentable2,options.pi,options.pc,options.pe,hpd,'allblast.db', genes=pproteins)
+                if  isinstance(pathogen_blast2, pd.DataFrame) and isinstance(host_blast, pd.DataFrame):
+                    results = ppi(hd,pathogen_blast2,host_blast)
+                    results['species'] = options.pathogentable2.split("_")[1]
+                    results.reset_index(inplace=True, drop=True)
+                    # Check if results for this hpd already exist and concatenate if so
+                    if hpd in results_list:
+                        results_list[hpd] = pd.concat([results_list[hpd], results], ignore_index=True)
+                    else:
+                        results_list[hpd] = results
+            
         try:
             final = pd.concat(results_list.values(),ignore_index=True)
             final.reset_index(inplace=True, drop=True)
+            final.sort_values(by=['Host_Protein','Pathogen_Protein', 'species'], inplace=True)
             rid = add_results(final.to_dict('records'))
             print(rid)
         except Exception:
@@ -221,7 +237,7 @@ def main():
 
     if options.method == 'consensus':
         species = options.pathogentable.split("_")[1]
-        table = 'domain_'+species
+        table = 'domain_' + species
         # table = 'domain_'+options.domdb+"_"+species
         if hproteins == None and pproteins == None:
             domain_result = filter_domain(table, intdb=domTables)
@@ -235,12 +251,24 @@ def main():
         for hpd in intTables:
             host_blast = filter_blast(options.hosttable,options.hi,options.hc,options.he,hpd,'allblast.db', genes=hproteins)
             pathogen_blast = filter_blast(options.pathogentable,options.pi,options.pc,options.pe,hpd,'allblast.db', genes=pproteins)
+            pathogen_blast2 = filter_blast(options.pathogentable2,options.pi,options.pc,options.pe,hpd,'allblast.db', genes=pproteins)
             hd =hpd+'s'
         
             if  isinstance(pathogen_blast, pd.DataFrame) and isinstance(host_blast, pd.DataFrame):
                 results = ppi(hd,pathogen_blast,host_blast)
+                results['species'] = options.pathogentable.split("_")[1]
                 results.reset_index(inplace=True, drop=True)
                 results_list[hpd]=results
+
+            if  isinstance(pathogen_blast2, pd.DataFrame) and isinstance(host_blast, pd.DataFrame): 
+                results2 = ppi(hd,pathogen_blast2,host_blast)
+                results2['species'] = options.pathogentable2.split("_")[1]
+                results2.reset_index(inplace=True, drop=True)
+                # Check if results for this hpd already exist and concatenate if so
+                if hpd in results_list:
+                    results_list[hpd] = pd.concat([results_list[hpd], results2], ignore_index=True)
+                else:
+                    results_list[hpd] = results
             
         try:
             final = pd.concat(results_list.values(),ignore_index=True)

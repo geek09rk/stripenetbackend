@@ -12,9 +12,6 @@ const Transmemb = require("../models/Transmemb");
 const mongoose = require('mongoose');
 const { v4: uuidv4 } = require('uuid'); // Import uuid
 
-// In-memory store for download tasks
-// Note: For production, consider a more robust store (e.g., Redis)
-// Structure: { taskId: { status: 'pending' | 'ready' | 'error', queryParams: object, totalCount: number, error: null | string, timestamp: number } }
 let downloadTasks = {};
 const desiredOrder = ['pstrs', 'pstr130s', 'pstr78s'];
 
@@ -143,8 +140,6 @@ router.route('/domain_results/').post(async (req, res) => {
         return res.status(400).json({ message: "Primary species is required." });
       }
       collectionName = `domain_${body.species}`;
-      // No explicit species filter needed if single-species collections only contain that species
-      // If single-species collections *might* contain others, add: filter['species'] = body.species;
     }
 
 
@@ -161,8 +156,6 @@ router.route('/domain_results/').post(async (req, res) => {
     // Only sort if querying a paired collection (two species)
     if (useTwoSpecies) {
       resultsQuery = resultsQuery.sort({ Host_Protein: 1, Pathogen_Protein: 1 })
-      // Optional: Hint for sort if needed on paired collections
-      // .hint({ Host_Protein: 1, Pathogen_Protein: 1 })
     }
 
     const resultsPromise = resultsQuery.lean().exec();
@@ -174,7 +167,7 @@ router.route('/domain_results/').post(async (req, res) => {
     const hostAggregatePromise = TargetCollection.aggregate([
       { $match: filter },
       { $group: { _id: "$Host_Protein" } },
-    ]); // Hint with just Host_Protein might be best here
+    ]); 
 
     // Use aggregate to get distinct Pathogen_Protein values
     let pathogenAggregatePromise;
@@ -186,7 +179,7 @@ router.route('/domain_results/').post(async (req, res) => {
       pathogenAggregatePromise = TargetCollection.aggregate([
         { $match: filter },
         { $group: { _id: "$Pathogen_Protein" } },
-      ]).hint({ intdb: 1, Pathogen_Protein: 1 }); // Hint with just Pathogen_Protein might be best here
+      ]).hint({ intdb: 1, Pathogen_Protein: 1 });
     }
 
     // Use index depending on the filter
@@ -462,8 +455,6 @@ router.route('/tf/').get(async (req, res) => {
 router.route('/annotation/').get(async (req, res) => {
 
   try {
-    console.log(req.query);
-
     // let species = 'human'
     let { species, gene } = req.query
     let go_results = await GO[species].find({ 'gene': gene })
@@ -471,8 +462,6 @@ router.route('/annotation/').get(async (req, res) => {
     let interpro_results = await Interpro[species].find({ 'gene': gene })
     let local_results = await Local[species].find({ 'gene': gene })
     let drugs_results = await Drugs[species].find({ 'protein_id': gene })
-
-    console.log(go_results)
 
     // Filter out duplicate JSON objects
     hgo_results = filterDuplicates(go_results);
@@ -659,20 +648,7 @@ router.route('/domain_download/init').get(async (req, res) => {
   }
 });
 
-// 3. Get Download Status (Common for both)
-router.route('/download/status/:taskId').get((req, res) => {
-  const { taskId } = req.params;
-  const task = downloadTasks[taskId];
-
-  if (!task) {
-    return res.status(404).json({ message: "Task not found." });
-  }
-
-  // Return status, error, and total count
-  res.json({ status: task.status, error: task.error, totalCount: task.totalCount });
-});
-
-// 4. Get Download Data (Common for both) - STREAMING NDJSON
+// 3. Get Download Data (Common for both) - STREAMING NDJSON
 router.route('/download/data/:taskId').get(async (req, res) => {
   const { taskId } = req.params;
   const task = downloadTasks[taskId];
@@ -696,14 +672,6 @@ router.route('/download/data/:taskId').get(async (req, res) => {
     const resultsdb = mongoose.connection.useDb(dbName);
 
     console.log(`[Task ${taskId}] Determined DB: ${dbName}`);
-
-    // Extract necessary params for use within the loop if it's a domain task (Not needed anymore)
-    // let species = null;
-    // let useTwoSpecies = false; 
-    // if (isDomainTask) {
-    //     species = task.queryParams.species; // Assuming species is stored if needed later
-    //     useTwoSpecies = task.queryParams.useTwoSpecies; // Assuming this is stored if needed later
-    // }
 
     // Set headers for streaming NDJSON and suggest filename
     const filename = `download_${taskId}.ndjson`;
@@ -835,7 +803,6 @@ router.route('/consensus/').post(async (req, res) => {
       DomainB_interpro: 1,
       score: 1,
       intdb: 1 // Get the domain's interaction source
-      // Add other unique domain fields if necessary
     };
 
     // --- 4. Stream Interolog, Check Domain, Batch Insert Consensus --- 

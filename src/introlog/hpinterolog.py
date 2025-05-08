@@ -70,7 +70,6 @@ def filter_blast(table,ident, cov, evalue,intdb,db,genes=None):
         results = db.execute(query).fetchall()
 
     if len(results)>0:
-        # df = pd.DataFrame(results, columns=['id', 'id_x', 'qseqid', 'sseqid', 'pident','evalue', 'qcov', 'intdb'])
         df = pd.DataFrame(results, columns=['id', 'qseqid', 'sseqid', 'pident','evalue', 'qcov', 'intdb'])         
     else:
         df= "no"
@@ -99,7 +98,6 @@ def ppi(intdb, pathogendf, hostdf):
     query = "SELECT * FROM {} WHERE ProteinA IN {}  AND ProteinB IN {} OR ProteinB IN {}  AND ProteinA IN {}".format(intdb,ht,pt,ht,pt)
     result = conn.execute(query).fetchall()
     results = pd.DataFrame(result, columns=['ID', 'ProteinA', 'ProteinB', 'Method', 'Type', 'Confidence', 'PMID'])
-    # results = pd.DataFrame(result, columns=['ID', 'ProteinA', 'ProteinB'])
 
     # For host as interactor A and Pathogen as Interactor B
     hostA= hostdf[['qseqid', 'sseqid','intdb']]
@@ -123,7 +121,6 @@ def ppi(intdb, pathogendf, hostdf):
     final = pd.concat([resultsA, resultsB], axis=0)
 
     final_results = final[['Host_Protein', 'Pathogen_Protein', 'ProteinA', 'ProteinB', 'intdb_x', 'Method', 'Type', 'Confidence', 'PMID']]
-    # final_results = final[['Host_Protein', 'Pathogen_Protein', 'ProteinA', 'ProteinB', 'intdb_x']]
     
     # remove duplicate values
     final_results = final_results.drop_duplicates()

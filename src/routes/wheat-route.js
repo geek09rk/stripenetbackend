@@ -361,7 +361,7 @@ router.route('/local/').get(async (req, res) => {
 
 // Effectors
 router.route('/effectors/').get(async (req, res) => {
-
+  console.log(' GETS HERE' );
   let { species, page, size } = req.query
   if (!page) {
     page = 1
